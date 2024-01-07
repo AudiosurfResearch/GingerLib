@@ -3,6 +3,11 @@ name = "gingerlib"
 authors = ["m1nt_ (Rubber Duck Shobe)"]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "A library to read and write Quest3D channel group files."
+repository = "https://github.com/AudiosurfResearch/GingerLib/"
+keywords = ["audiosurf", "quest3d", "cgr", "q3d", "modding"]
+categories = ["parser-implementations", "encoding"]
 
 [dependencies]
 flate2 = "1.0.28"
