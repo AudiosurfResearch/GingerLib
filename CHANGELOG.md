@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release.
+ - 7 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Add CHANGELOG.md ([`5f1d06b`](https://github.com/AudiosurfResearch/GingerLib/commit/5f1d06b6a5f1dd15683dfbbee7e2d40bdbc46a1b))
     - Update Cargo.toml ([`dc37cfb`](https://github.com/AudiosurfResearch/GingerLib/commit/dc37cfbc2d1f6409c8ff4edc876a5a8a545e8701))
     - Rename, document and move read_tags to `Tag::from_stream` ([`3587e22`](https://github.com/AudiosurfResearch/GingerLib/commit/3587e22afe6a632722da6fc1dcb19bf37f6ba8bc))
     - Add documentation ([`deef7c0`](https://github.com/AudiosurfResearch/GingerLib/commit/deef7c0eff670beb5d023b729df84eae543ff8e1))
