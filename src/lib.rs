@@ -53,11 +53,33 @@ where
 }
 
 #[derive(Debug)]
+/// Struct representing a channel group file, which is used by the Quest3D engine to store any kind of data.
+/// It contains several "tags", which consist of a 4 character name and the data.
+/// The actual file will contain a 4-byte-long number indicating after the name, but this is not stored in the struct.
+/// Tags may also contain no data at all, which is the case for the A3DG tag, since it's used as the magic number.
 pub struct Quest3DFile {
     pub tags: Vec<Tag>,
 }
 
 impl Quest3DFile {
+    /// Reads a file from the specified path.
+    /// 
+    /// **This works with compressed and protected files too,**
+    /// in those cases it will automatically decompress it and remove the protection.
+    /// 
+    /// # Example
+    /// ```rust
+    /// use gingerlib::Quest3DFile;
+    /// 
+    /// let file = Quest3DFile::read("./test.cgr").unwrap();
+    /// assert_eq!(file.tags.len(), 150);
+    /// ```
+    /// 
+    /// # Returns
+    /// The loaded `Quest3DFile`.
+    /// 
+    /// # Errors
+    /// Returns an `std::io::Error` if the file could not be opened.
     pub fn read(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let mut file = File::open(path)?;
         let tags = read_tags(&mut file)?;
@@ -92,6 +114,10 @@ impl Quest3DFile {
         Ok(Self { tags })
     }
 
+    /// Converts the tags of the file to a byte vector.
+    /// 
+    /// # Returns
+    /// A byte vector containing the tags.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::new();
 
@@ -104,6 +130,13 @@ impl Quest3DFile {
         data
     }
 
+    /// Saves the file to the specified path.
+    /// 
+    /// # Returns
+    /// The `File`.
+    /// 
+    /// # Errors
+    /// Returns an `std::io::Error` if the file could not be created.
     pub fn save_to_file(&self, path: &str) -> Result<File, io::Error> {
         let mut file = File::create(path)?;
 
