@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Cursor, Read, Seek, SeekFrom},
+    io::{self, Cursor, Read, Seek, SeekFrom, Write},
 };
 
 #[derive(Debug)]
@@ -13,11 +13,6 @@ impl Tag {
     pub fn new(name: String, data: Vec<u8>) -> Self {
         Self { name, data }
     }
-}
-
-#[derive(Debug)]
-pub struct Quest3DFile {
-    pub tags: Vec<Tag>,
 }
 
 /// Reads tags from a stream
@@ -38,6 +33,12 @@ where
         let mut name = [0u8; 4];
         stream.read_exact(&mut name)?;
         let name = String::from_utf8(name.to_vec())?;
+        // The A3DG tag is not followed by any data. It's the magic number.
+        // Curiously, it's not the first tag in the file, it's preceded by QVRS which denotes the engine version.
+        if name == "A3DG" { 
+            tags.push(Tag::new(name, vec![0; 0]));
+            continue;
+        }
 
         let mut size = [0u8; 4];
         stream.read_exact(&mut size)?;
@@ -49,6 +50,11 @@ where
         tags.push(Tag::new(name, data));
     }
     Ok(tags)
+}
+
+#[derive(Debug)]
+pub struct Quest3DFile {
+    pub tags: Vec<Tag>,
 }
 
 impl Quest3DFile {
@@ -65,10 +71,53 @@ impl Quest3DFile {
             let mut data = Cursor::new(data);
 
             let tags = read_tags(&mut data)?;
+
+            //Check if file is protected
+            if tags[4].name == "NECB" {
+                let mut data = tags[4].data.clone();
+                //Decrypt by XORing every byte with 4
+                //chosen by fair dice roll. guaranteed to be random.
+                for i in &mut data {
+                    *i ^= 4u8;
+                }
+                let mut data = Cursor::new(data);
+
+                let tags = read_tags(&mut data)?;
+                return Ok(Self { tags });
+            }
+
             return Ok(Self { tags });
         }
 
         Ok(Self { tags })
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut data = Vec::new();
+
+        for tag in &self.tags {
+            data.extend(tag.name.as_bytes());
+            data.extend(&(tag.data.len() as u32).to_le_bytes());
+            data.extend(&tag.data);
+        }
+
+        data
+    }
+
+    pub fn save_to_file(&self, path: &str) -> Result<File, io::Error> {
+        let mut file = File::create(path)?;
+
+        for tag in &self.tags {
+            file.write_all(tag.name.as_bytes())?;
+            //as stated previously, the A3DG tag is just the magic number
+            if tag.name == "A3DG" {
+                continue;
+            }
+            file.write_all(&(tag.data.len() as u32).to_le_bytes())?;
+            file.write_all(&tag.data)?;
+        }
+
+        Ok(file)
     }
 }
 
@@ -88,11 +137,19 @@ mod tests {
         .unwrap();
 
         //test if all tags are read
-        assert_eq!(file.tags.len(), 5);
-        assert_eq!(file.tags[0].name, "ACTF");
-        assert_eq!(file.tags[1].name, "NECL");
-        assert_eq!(file.tags[2].name, "NECT");
-        assert_eq!(file.tags[3].name, "NEOS");
-        assert_eq!(file.tags[4].name, "NECB");
+        assert_eq!(file.tags.len(), 150);
+    }
+
+    #[test]
+    fn test_save() {
+        let file = Quest3DFile::read(
+            Path::new(&env::var("AUDIOSURF_ENGINE_DIR").unwrap())
+                .join("progress calculator.cgr")
+                .to_str()
+                .unwrap(),
+        )
+        .unwrap();
+
+        file.save_to_file("./test.cgr").unwrap();
     }
 }
