@@ -10,46 +10,53 @@ pub struct Tag {
 }
 
 impl Tag {
+    /// Reads tags from a stream
+    /// 
+    /// # Returns
+    /// A ``Vec<Tag>`` containing all tags from the stream.
+    /// 
+    /// # Errors
+    /// Returns an ``std::io::Error`` if the stream could not be read.
+    /// Returns a ``std::string::FromUtf8Error`` if the tag name could not be converted to a string.
+    pub fn from_stream<S>(stream: &mut S) -> Result<Vec<Tag>, Box<dyn std::error::Error>>
+    where
+        S: Read + Seek,
+    {
+        let mut tags: Vec<Tag> = Vec::new();
+
+        // Seek to the end to get the length
+        let pos = stream.stream_position()?;
+        let len = stream.seek(SeekFrom::End(0))?;
+
+        // Seek back to the original position
+        stream.seek(SeekFrom::Start(pos))?;
+
+        while stream.stream_position()? < len {
+            let mut name = [0u8; 4];
+            stream.read_exact(&mut name)?;
+            let name = String::from_utf8(name.to_vec())?;
+            // The A3DG tag is not followed by any data. It's the magic number.
+            // Curiously, it's not the first tag in the file, it's preceded by QVRS which denotes the engine version.
+            if name == "A3DG" {
+                tags.push(Tag::new(name, vec![0; 0]));
+                continue;
+            }
+
+            let mut size = [0u8; 4];
+            stream.read_exact(&mut size)?;
+            let size = u32::from_le_bytes(size);
+
+            let mut data = vec![0; size as usize];
+            stream.read_exact(&mut data)?;
+
+            tags.push(Tag::new(name, data));
+        }
+        Ok(tags)
+    }
+
     pub fn new(name: String, data: Vec<u8>) -> Self {
         Self { name, data }
     }
-}
-
-/// Reads tags from a stream
-fn read_tags<S>(stream: &mut S) -> Result<Vec<Tag>, Box<dyn std::error::Error>>
-where
-    S: Read + Seek,
-{
-    let mut tags: Vec<Tag> = Vec::new();
-
-    // Seek to the end to get the length
-    let pos = stream.stream_position()?;
-    let len = stream.seek(SeekFrom::End(0))?;
-
-    // Seek back to the original position
-    stream.seek(SeekFrom::Start(pos))?;
-
-    while stream.stream_position()? < len {
-        let mut name = [0u8; 4];
-        stream.read_exact(&mut name)?;
-        let name = String::from_utf8(name.to_vec())?;
-        // The A3DG tag is not followed by any data. It's the magic number.
-        // Curiously, it's not the first tag in the file, it's preceded by QVRS which denotes the engine version.
-        if name == "A3DG" { 
-            tags.push(Tag::new(name, vec![0; 0]));
-            continue;
-        }
-
-        let mut size = [0u8; 4];
-        stream.read_exact(&mut size)?;
-        let size = u32::from_le_bytes(size);
-
-        let mut data = vec![0; size as usize];
-        stream.read_exact(&mut data)?;
-
-        tags.push(Tag::new(name, data));
-    }
-    Ok(tags)
 }
 
 #[derive(Debug)]
@@ -63,26 +70,26 @@ pub struct Quest3DFile {
 
 impl Quest3DFile {
     /// Reads a file from the specified path.
-    /// 
+    ///
     /// **This works with compressed and protected files too,**
     /// in those cases it will automatically decompress it and remove the protection.
-    /// 
+    ///
     /// # Example
     /// ```rust
     /// use gingerlib::Quest3DFile;
-    /// 
+    ///
     /// let file = Quest3DFile::read("./test.cgr").unwrap();
     /// assert_eq!(file.tags.len(), 150);
     /// ```
-    /// 
+    ///
     /// # Returns
     /// The loaded `Quest3DFile`.
-    /// 
+    ///
     /// # Errors
     /// Returns an `std::io::Error` if the file could not be opened.
     pub fn read(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let mut file = File::open(path)?;
-        let tags = read_tags(&mut file)?;
+        let tags = Tag::from_stream(&mut file)?;
 
         //Check if file is compressed
         if tags[3].name == "ZICB" {
@@ -92,7 +99,7 @@ impl Quest3DFile {
             decoder.read_to_end(&mut data)?;
             let mut data = Cursor::new(data);
 
-            let tags = read_tags(&mut data)?;
+            let tags = Tag::from_stream(&mut data)?;
 
             //Check if file is protected
             if tags[4].name == "NECB" {
@@ -104,7 +111,7 @@ impl Quest3DFile {
                 }
                 let mut data = Cursor::new(data);
 
-                let tags = read_tags(&mut data)?;
+                let tags = Tag::from_stream(&mut data)?;
                 return Ok(Self { tags });
             }
 
@@ -115,7 +122,7 @@ impl Quest3DFile {
     }
 
     /// Converts the tags of the file to a byte vector.
-    /// 
+    ///
     /// # Returns
     /// A byte vector containing the tags.
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -131,10 +138,10 @@ impl Quest3DFile {
     }
 
     /// Saves the file to the specified path.
-    /// 
+    ///
     /// # Returns
     /// The `File`.
-    /// 
+    ///
     /// # Errors
     /// Returns an `std::io::Error` if the file could not be created.
     pub fn save_to_file(&self, path: &str) -> Result<File, io::Error> {
