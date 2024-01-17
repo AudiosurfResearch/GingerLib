@@ -5,20 +5,20 @@ use std::str;
 use tracing::trace;
 use uuid::Uuid;
 
+use crate::errors::ParseError;
 use crate::{channelgroups::ChannelGroup, channels::Channel};
 
-pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, Box<dyn std::error::Error + '_>> {
-    let (input, (tag_name, _)) = parse_tag(input)?;
+pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
+    let (input, (tag_name, _)) = parse_tag(input).map_err(|_| ParseError::NomError)?;
 
     match tag_name.as_str() {
         "ACTF" => {
-            let decompressed_data =
-                decompress(&input).map_err(|_| Box::from("Failed to decompress"))?;
+            let decompressed_data = decompress(input).map_err(|_| ParseError::NomError)?;
             let unprotected_data =
-                unprotect(&decompressed_data).map_err(|_| Box::from("Failed to unprotect"))?;
+                unprotect(&decompressed_data).map_err(|_| ParseError::NomError)?;
 
             let (_, header) = parse_group_header(unprotected_data.as_slice())
-                .map_err(|_| Box::from("Failed to unprotect"))?;
+                .map_err(|_| ParseError::NomError)?;
 
             Ok(ChannelGroup {
                 engine_version: header.engine_version,
@@ -33,7 +33,7 @@ pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, Box<dyn std::error::Erro
             name: String::new(),
             channels: Vec::new(),
         }),
-        _ => Err(Box::from("Invalid file type")),
+        _ => Err(ParseError::InvalidFileType),
     }
 }
 
@@ -45,10 +45,10 @@ fn parse_tag(input: &[u8]) -> IResult<&[u8], (String, &[u8])> {
 }
 
 pub fn decompress(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '_>> {
-    count(parse_tag, 2)(&input)?; //skip two tags
+    count(parse_tag, 2)(input)?; //skip two tags
 
     trace!("Decompressing channel group");
-    let (_, (tag_name, compressed_data)) = parse_tag(&input)?; //ZICB
+    let (_, (tag_name, compressed_data)) = parse_tag(input)?; //ZICB
     if tag_name == "ZICB" {
         let compressed_stream = Cursor::new(compressed_data);
         let mut data = Vec::new();

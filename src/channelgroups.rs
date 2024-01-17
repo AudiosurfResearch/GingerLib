@@ -37,10 +37,9 @@ impl ChannelGroup {
         trace!("Opening file: {:?}", path);
         let buffer = fs::read(path)?;
 
-        let channel_group = match parse_file(&buffer) {
-            Ok(channel_group) => Ok(channel_group),
-            Err(_) => Err(Box::from("Invalid file type")),
-        };
-        channel_group
+        parse_file(&buffer).map_or_else(
+            |_| Err(Box::from("Invalid file type")),
+            Ok,
+        )
     }
 }

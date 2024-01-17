@@ -2,6 +2,7 @@
 
 pub mod channelgroups;
 pub mod channels;
+pub mod errors;
 mod parser;
 
 #[cfg(test)]
