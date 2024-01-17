@@ -35,11 +35,12 @@ impl ChannelGroup {
     /// Returns an `std::io::Error` if the file could not be opened.
     pub fn read_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         trace!("Opening file: {:?}", path);
-        let mut buffer = fs::read(path)?;
+        let buffer = fs::read(path)?;
 
-        match parse_file(&buffer) {
-            Ok((_, channel_group)) => Ok(channel_group),
+        let channel_group = match parse_file(&buffer) {
+            Ok(channel_group) => Ok(channel_group),
             Err(_) => Err(Box::from("Invalid file type")),
-        }
+        };
+        channel_group
     }
 }
