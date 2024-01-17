@@ -9,6 +9,7 @@ use crate::errors::ParseError;
 use crate::{channelgroups::ChannelGroup, channels::Channel};
 
 pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
+    trace!("Parsing file");
     let (input, (tag_name, _)) = parse_tag(input).map_err(|_| ParseError::NomError)?;
 
     match tag_name.as_str() {
@@ -38,6 +39,8 @@ pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
 }
 
 fn parse_tag(input: &[u8]) -> IResult<&[u8], (String, &[u8])> {
+    // TODO! Make this check for tags with no length indicator!!!
+
     let (input, (tag_name, tag_size)) = tuple((nom::bytes::complete::take(4usize), le_u32))(input)?;
     let tag_name = str::from_utf8(tag_name).unwrap().to_string();
     let (input, tag_data) = nom::bytes::complete::take(tag_size as usize)(input)?;
@@ -45,9 +48,9 @@ fn parse_tag(input: &[u8]) -> IResult<&[u8], (String, &[u8])> {
 }
 
 pub fn decompress(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '_>> {
-    count(parse_tag, 2)(input)?; //skip two tags
-
     trace!("Decompressing channel group");
+    let (input, _) = count(parse_tag, 2)(input)?; //skip two tags
+
     let (_, (tag_name, compressed_data)) = parse_tag(input)?; //ZICB
     if tag_name == "ZICB" {
         let compressed_stream = Cursor::new(compressed_data);
@@ -62,8 +65,10 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '
 
 pub fn unprotect(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '_>> {
     trace!("Unprotecting channel group");
-    count(parse_tag, 4)(input)?; //skip four tags because we dont need them
+    let (input, _) = count(parse_tag, 4)(input)?; //skip four tags because we dont need them
+
     let (_, (tag_name, data)) = parse_tag(input)?;
+    trace!("Tag name: {}", tag_name);
     if tag_name == "NECB" {
         let mut data = data.to_vec();
         // Decrypt by XORing every byte with 4
@@ -85,7 +90,9 @@ pub struct GroupHeader {
 }
 
 pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
+    trace!("Parsing group header");
     let (input, (tag_name, tag_data)) = parse_tag(input)?;
+    trace!("Tag name: {}", tag_name);
     if tag_name != "QVRS" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
@@ -95,6 +102,7 @@ pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
     let (input, engine_version) = le_u32(tag_data)?;
 
     let (input, (tag_name, tag_data)) = parse_tag(input)?;
+    trace!("Tag name: {}", tag_name);
     if tag_name != "A3DG" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
@@ -103,6 +111,7 @@ pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
     }
 
     let (input, (tag_name, _)) = parse_tag(input)?;
+    trace!("Tag name: {}", tag_name);
     if tag_name != "CGGG" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
