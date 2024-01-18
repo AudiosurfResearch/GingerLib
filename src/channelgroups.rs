@@ -1,4 +1,4 @@
-use crate::{channels::Channel, parser::parse_file};
+use crate::{channels::Channel, parser::parse_file, errors::ParseError};
 use std::fs;
 use tracing::trace;
 use uuid::Uuid;
@@ -33,13 +33,10 @@ impl ChannelGroup {
     ///
     /// # Errors
     /// Returns an `std::io::Error` if the file could not be opened.
-    pub fn read_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn read_from_file(path: &str) -> Result<Self, ParseError> {
         trace!("Opening file: {:?}", path);
-        let buffer = fs::read(path)?;
+        let buffer = fs::read(path).map_err(ParseError::IoError)?;
 
-        parse_file(&buffer).map_or_else(
-            |_| Err(Box::from("Invalid file type")),
-            Ok,
-        )
+        parse_file(&buffer)
     }
 }

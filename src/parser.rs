@@ -106,7 +106,7 @@ pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
             nom::error::ErrorKind::Tag,
         )));
     }
-    let (input, engine_version) = le_u32(tag_data)?;
+    let (_, engine_version) = le_u32(tag_data)?;
     trace!("Engine version is {}", engine_version);
 
     let (input, (tag_name, _)) = parse_tag(input)?;
@@ -120,7 +120,6 @@ pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
     trace!("Valid magic number found");
 
     let (input, (tag_name, _)) = parse_tag(input)?;
-    trace!("Tag name: {}", tag_name);
     if tag_name != "CGGG" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
