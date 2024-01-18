@@ -110,7 +110,6 @@ pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
     trace!("Engine version is {}", engine_version);
 
     let (input, (tag_name, _)) = parse_tag(input)?;
-    trace!("Tag spotted: {}", tag_name);
     if tag_name != "A3DG" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
@@ -119,14 +118,13 @@ pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
     }
     trace!("Valid magic number found");
 
-    let (input, (tag_name, _)) = parse_tag(input)?;
+    let (input, (tag_name, tag_data)) = parse_tag(input)?;
     if tag_name != "CGGG" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Tag,
         )));
     }
-    let (input, (_, tag_data)) = parse_tag(input)?;
     let guid = Uuid::from_slice(tag_data).map_err(|_| {
         nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Tag))
     })?;
