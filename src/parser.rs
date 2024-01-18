@@ -1,3 +1,4 @@
+use nom::bytes::complete::take;
 use nom::multi::count;
 use nom::{number::complete::le_u32, sequence::tuple, IResult};
 use std::io::{Cursor, Read};
@@ -39,11 +40,18 @@ pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
 }
 
 fn parse_tag(input: &[u8]) -> IResult<&[u8], (String, &[u8])> {
-    // TODO! Make this check for tags with no length indicator!!!
-
-    let (input, (tag_name, tag_size)) = tuple((nom::bytes::complete::take(4usize), le_u32))(input)?;
+    let (input, tag_name) = take(4usize)(input)?; //skip tag name
     let tag_name = str::from_utf8(tag_name).unwrap().to_string();
-    let (input, tag_data) = nom::bytes::complete::take(tag_size as usize)(input)?;
+    trace!("Parsing: {}", tag_name);
+
+    let (input2, tag_size) = take(4usize)(input)?;
+    // if the tag size is all valid ASCII characters, it's a tag with no length indicator
+    if tag_size.iter().all(|&c| c.is_ascii_uppercase()) {
+        return Ok((input, (tag_name, [0u8; 0].as_ref())));
+    }
+    let tag_size = u32::from_le_bytes(tag_size.try_into().unwrap());
+
+    let (input, tag_data) = nom::bytes::complete::take(tag_size as usize)(input2)?;
     Ok((input, (tag_name, tag_data)))
 }
 
@@ -65,10 +73,10 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '
 
 pub fn unprotect(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '_>> {
     trace!("Unprotecting channel group");
-    let (input, _) = count(parse_tag, 4)(input)?; //skip four tags because we dont need them
+    let (input2, yeah) = count(parse_tag, 4)(input)?; //skip four tags because we dont need them
+    trace!("Yeah: {:?}", yeah);
 
-    let (_, (tag_name, data)) = parse_tag(input)?;
-    trace!("Tag name: {}", tag_name);
+    let (_, (tag_name, data)) = parse_tag(input2)?;
     if tag_name == "NECB" {
         let mut data = data.to_vec();
         // Decrypt by XORing every byte with 4
@@ -79,7 +87,7 @@ pub fn unprotect(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '_
 
         Ok(data)
     } else {
-        Err(Box::from("Invalid file type"))
+        Ok(input.to_vec()) // if it's not protected, just return the input
     }
 }
 
@@ -92,7 +100,6 @@ pub struct GroupHeader {
 pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
     trace!("Parsing group header");
     let (input, (tag_name, tag_data)) = parse_tag(input)?;
-    trace!("Tag name: {}", tag_name);
     if tag_name != "QVRS" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
@@ -100,15 +107,17 @@ pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
         )));
     }
     let (input, engine_version) = le_u32(tag_data)?;
+    trace!("Engine version is {}", engine_version);
 
-    let (input, (tag_name, tag_data)) = parse_tag(input)?;
-    trace!("Tag name: {}", tag_name);
+    let (input, (tag_name, _)) = parse_tag(input)?;
+    trace!("Tag spotted: {}", tag_name);
     if tag_name != "A3DG" {
         return Err(nom::Err::Failure(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Tag,
         )));
     }
+    trace!("Valid magic number found");
 
     let (input, (tag_name, _)) = parse_tag(input)?;
     trace!("Tag name: {}", tag_name);
