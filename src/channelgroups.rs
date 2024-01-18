@@ -1,7 +1,6 @@
-use crate::{channels::Channel, parser::parse_file, errors::ParseError};
+use crate::{channels::Tag, errors::ParseError, parser::parse_file};
 use std::fs;
 use tracing::trace;
-use uuid::Uuid;
 
 #[derive(Debug)]
 /// Struct representing a channel group file, which is used by the engine to store any kind of data.
@@ -9,10 +8,7 @@ use uuid::Uuid;
 /// The actual file will contain a 4-byte-long number indicating after the name, but this is not stored in the struct.
 /// Tags may also contain no data at all, which is the case for the A3DG tag, since it's used as the magic number.
 pub struct ChannelGroup {
-    pub engine_version: u32,
-    pub guid: Uuid,
-    pub name: String,
-    pub channels: Vec<Channel>,
+    pub tags: Vec<Tag>,
 }
 
 impl ChannelGroup {

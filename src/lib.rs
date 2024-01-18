@@ -14,7 +14,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let channelgroup = ChannelGroup::read_from_file("./samples/ASR_PedroCamacho_AudiosurfOverture.cgr").unwrap();
+        let channelgroup = ChannelGroup::read_from_file("./test.cgr").unwrap();
         trace!("{channelgroup:?}");
     }
 }

@@ -1,13 +1,14 @@
 use nom::bytes::complete::take;
 use nom::multi::count;
-use nom::{number::complete::le_u32, sequence::tuple, IResult};
+use nom::{number::complete::le_u32, IResult};
 use std::io::{Cursor, Read};
 use std::str;
 use tracing::trace;
 use uuid::Uuid;
 
+use crate::channelgroups::ChannelGroup;
+use crate::channels::Tag;
 use crate::errors::ParseError;
-use crate::{channelgroups::ChannelGroup, channels::Channel};
 
 pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
     trace!("Parsing file");
@@ -19,22 +20,37 @@ pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
             let unprotected_data =
                 unprotect(&decompressed_data).map_err(|_| ParseError::NomError)?;
 
-            let (_, header) = parse_group_header(unprotected_data.as_slice())
-                .map_err(|_| ParseError::NomError)?;
+            let mut tags = Vec::new();
+            // Parse the tags while there's still data left
+            let mut input = input;
+            while !input.is_empty() {
+                let (input2, (tag_name, tag_data)) =
+                    parse_tag(input).map_err(|_| ParseError::NomError)?;
+                tags.push(Tag {
+                    name: tag_name,
+                    data: tag_data.to_vec(),
+                });
+                input = input2; // Update the input to the remaining data
+            }
 
-            Ok(ChannelGroup {
-                engine_version: header.engine_version,
-                guid: header.guid,
-                name: String::new(),
-                channels: Vec::new(),
-            })
+            Ok(ChannelGroup { tags })
         }
-        "QVRS" => Ok(ChannelGroup {
-            engine_version: 60,
-            guid: Uuid::nil(),
-            name: String::new(),
-            channels: Vec::new(),
-        }),
+        "QVRS" => {
+            let mut tags = Vec::new();
+            // Parse the tags while there's still data left
+            let mut input = input;
+            while !input.is_empty() {
+                let (input2, (tag_name, tag_data)) =
+                    parse_tag(input).map_err(|_| ParseError::NomError)?;
+                tags.push(Tag {
+                    name: tag_name,
+                    data: tag_data.to_vec(),
+                });
+                input = input2; // Update the input to the remaining data
+            }
+
+            Ok(ChannelGroup { tags })
+        }
         _ => Err(ParseError::InvalidFileType),
     }
 }
@@ -73,8 +89,7 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '
 
 pub fn unprotect(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '_>> {
     trace!("Unprotecting channel group");
-    let (input2, yeah) = count(parse_tag, 4)(input)?; //skip four tags because we dont need them
-    trace!("Yeah: {:?}", yeah);
+    let (input2, _) = count(parse_tag, 4)(input)?; //skip four tags because we dont need them
 
     let (_, (tag_name, data)) = parse_tag(input2)?;
     if tag_name == "NECB" {
@@ -89,56 +104,4 @@ pub fn unprotect(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '_
     } else {
         Ok(input.to_vec()) // if it's not protected, just return the input
     }
-}
-
-#[derive(Debug)]
-pub struct GroupHeader {
-    pub engine_version: u32,
-    pub guid: Uuid,
-}
-
-pub fn parse_group_header(input: &[u8]) -> IResult<&[u8], GroupHeader> {
-    trace!("Parsing group header");
-    let (input, (tag_name, tag_data)) = parse_tag(input)?;
-    if tag_name != "QVRS" {
-        return Err(nom::Err::Failure(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Tag,
-        )));
-    }
-    let (_, engine_version) = le_u32(tag_data)?;
-    trace!("Engine version is {}", engine_version);
-
-    let (input, (tag_name, _)) = parse_tag(input)?;
-    if tag_name != "A3DG" {
-        return Err(nom::Err::Failure(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Tag,
-        )));
-    }
-    trace!("Valid magic number found");
-
-    let (input, (tag_name, tag_data)) = parse_tag(input)?;
-    if tag_name != "CGGG" {
-        return Err(nom::Err::Failure(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Tag,
-        )));
-    }
-    let guid = Uuid::from_slice(tag_data).map_err(|_| {
-        nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Tag))
-    })?;
-
-    count(parse_tag, 2)(input)?; //CGUC, CHCO
-
-    let (input, (_, tag_data)) = parse_tag(input)?;
-    let (input, channel_count) = le_u32(tag_data)?;
-
-    Ok((
-        input,
-        GroupHeader {
-            engine_version,
-            guid,
-        },
-    ))
 }
