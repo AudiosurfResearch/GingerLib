@@ -1,7 +1,7 @@
 [package]
 name = "gingerlib"
 authors = ["m1nt_ (Rubber Duck Shobe)"]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 description = "A library to read and write Quest3D channel group files."

@@ -1,13 +1,11 @@
 use nom::bytes::complete::take;
 use nom::multi::count;
-use nom::{number::complete::le_u32, IResult};
+use nom::IResult;
 use std::io::{Cursor, Read};
 use std::str;
 use tracing::trace;
-use uuid::Uuid;
 
-use crate::channelgroups::ChannelGroup;
-use crate::channels::Tag;
+use crate::channelgroups::{ChannelGroup, Tag};
 use crate::errors::ParseError;
 
 pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
@@ -22,7 +20,7 @@ pub fn parse_file(input: &[u8]) -> Result<ChannelGroup, ParseError> {
 
             let mut tags = Vec::new();
             // Parse the tags while there's still data left
-            let mut input = input;
+            let mut input = unprotected_data.as_slice();
             while !input.is_empty() {
                 let (input2, (tag_name, tag_data)) =
                     parse_tag(input).map_err(|_| ParseError::NomError)?;
@@ -77,6 +75,7 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + '
 
     let (_, (tag_name, compressed_data)) = parse_tag(input)?; //ZICB
     if tag_name == "ZICB" {
+        trace!("Decompressing!");
         let compressed_stream = Cursor::new(compressed_data);
         let mut data = Vec::new();
         let mut decoder = flate2::read::ZlibDecoder::new(compressed_stream);
